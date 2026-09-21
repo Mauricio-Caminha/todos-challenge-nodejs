@@ -219,4 +219,80 @@ describe('Todos', () => {
 
     expect(response.body.error).toBeTruthy();
   });
+
+  it('should not be able to access todos without a username', async () => {
+    const response = await request(app)
+      .get('/todos')
+      .expect(404);
+
+    expect(response.body).toEqual({ error: 'User not found!' });
+  });
+
+  it('should only list todos belonging to the authenticated user', async () => {
+    const firstUserResponse = await request(app)
+      .post('/users')
+      .send({
+        name: 'First User',
+        username: 'isolation-user-1'
+      });
+
+    const secondUserResponse = await request(app)
+      .post('/users')
+      .send({
+        name: 'Second User',
+        username: 'isolation-user-2'
+      });
+
+    const todoResponse = await request(app)
+      .post('/todos')
+      .send({
+        title: 'private todo',
+        deadline: new Date()
+      })
+      .set('username', firstUserResponse.body.username);
+
+    const response = await request(app)
+      .get('/todos')
+      .set('username', secondUserResponse.body.username);
+
+    expect(response.body).not.toEqual(
+      expect.arrayContaining([todoResponse.body])
+    );
+    expect(response.body).toEqual([]);
+  });
+
+  it('should not be able to update another user todo', async () => {
+    const ownerResponse = await request(app)
+      .post('/users')
+      .send({
+        name: 'Todo Owner',
+        username: 'owner-user'
+      });
+
+    const otherUserResponse = await request(app)
+      .post('/users')
+      .send({
+        name: 'Other User',
+        username: 'other-user'
+      });
+
+    const todoResponse = await request(app)
+      .post('/todos')
+      .send({
+        title: 'owner todo',
+        deadline: new Date()
+      })
+      .set('username', ownerResponse.body.username);
+
+    const response = await request(app)
+      .put(`/todos/${todoResponse.body.id}`)
+      .send({
+        title: 'updated by another user',
+        deadline: new Date()
+      })
+      .set('username', otherUserResponse.body.username)
+      .expect(404);
+
+    expect(response.body).toEqual({ error: 'Todo not found!' });
+  });
 });
